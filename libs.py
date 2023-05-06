@@ -8,7 +8,7 @@ import numpy as np
 #     return abs(state[0] / 4294967295)
 
 def randomValue(state):
-    state[0] = state[0] * 747796405 + 289133645
+    state[0] = state[0] * 747796405 + 2891336453
     result = np.array([5], dtype=np.uint32)
     result[0] = ((state[0] >> ((state[0] >> 28) + 4)) ^ state[0]) * 277803737
     result[0] = (result[0] >> 22) ^ result[0]
@@ -25,6 +25,21 @@ def normalize(vect):
         return vect
     return vect / norm
 
+def reflect_dir(ray_dir, normal):
+    return normalize(-2 * np.dot(normal, ray_dir)*normal + ray_dir)
+
+
+# def GetEnvironmentLight(EnvironmentEnabled, ray):
+#     if not EnvironmentEnabled:
+#         return 0
+#     skyGradientT = pow(smoothstep(0, 0.4, ray.dir.y), 0.35)
+#     groundToSkyT = smoothstep(-0.01, 0, ray.dir.y)
+#     skyGradient = lerp(SkyColourHorizon, SkyColourZenith, skyGradientT)
+#     sun = pow(max(0, dot(ray.dir, _WorldSpaceLightPos0.xyz)), SunFocus) * SunIntensity
+#     # Combine ground, sky, and sun
+#     return composite
+#     composite = lerp(GroundColour, skyGradient, groundToSkyT) + sun * (groundToSkyT >= 1)
+
 def randomDirection(state):
     # x = random.normalvariate(0.5, 1.0)
     # y = random.normalvariate(0.5, 1.0)
@@ -36,20 +51,6 @@ def randomDirection(state):
     y = randomValueNormal(state)
     z = randomValueNormal(state)
     return normalize(np.array([x, y, z]))
-
-
-
-
-# def GetEnvironmentLight(EnvironmentEnabled, ray):
-#     if not EnvironmentEnabled:
-#         return 0
-#     skyGradientT = pow(smoothstep(0, 0.4, ray.dir.y), 0.35)
-#     groundToSkyT = smoothstep(-0.01, 0, ray.dir.y)
-#     skyGradient = lerp(SkyColourHorizon, SkyColourZenith, skyGradientT)
-#     sun = pow(max(0, dot(ray.dir, _WorldSpaceLightPos0.xyz)), SunFocus) * SunIntensity
-#     # Combine ground, sky, and sun
-#     composite = lerp(GroundColour, skyGradient, groundToSkyT) + sun * (groundToSkyT >= 1)
-#     return composite
 
 
 class Ray:

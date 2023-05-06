@@ -40,10 +40,10 @@ sun = Sphere.Sphere(0, 0, 1000, 500)
 sun.material(colour=np.array([255.0, 255.0, 255.0]))
 s3 = Sphere.Sphere(0, -1018, 0, 1000)
 s3.material(colour=np.array([0.0, 0.0, 255.0]))
-s4 = Sphere.Sphere(-500, 400, 1000, 100)
+s4 = Sphere.Sphere(-500, 400, 1000, 1000)
 s4.material(colour=np.array([255.0, 255.0, 255.0]),
             emission_colour=np.array([255.0, 255.0, 255.0]),
-            emission_strength=100000.0)
+            emission_strength=1.0)
 p0 = Plane.Plane(np.array([0.0, -20.0, 0.0]), np.array([0.0, 1.0, 0.0]))
 p0.material(colour=np.array([0.0, 0.0, 255.0]))
 p1 = Plane.Plane(np.array([1000.0, 1000.0, 1000.0]), np.array([1.0, 1.0, 1.0]))
@@ -52,7 +52,7 @@ p1.material(colour=np.array([133.0, 243.0, 255.0]),
             emission_colour=np.array([133.0, 243.0, 255.0]),
             emission_strength=100.0)
 
-scene = [s0, s1, s2, s3, p1]
+scene = [s0, s1, s2, s3, s4]
 
 # final array and RT properties
 image = np.zeros((image_height, image_width, 3), dtype=np.float64)
@@ -61,23 +61,24 @@ recursion_ray_per_pixel = 2
 num_ray_per_pixels = recursion_ray_per_pixel**bounce_limit
 
 
-def CalculateRyCollision(ray):
+def CalculateRyCollision(ray, origin_obj=None):
     closest_hit = hitInfo(dist=10 ** 6)
     closest_obj = Object()
     for obj in scene:
-        hit = obj.collision(ray)
-        if hit.didHit:
-            if closest_hit.dist > hit.dist:
-                closest_hit = hit
-                closest_obj = obj
+        if obj is not origin_obj:
+            hit = obj.collision(ray)
+            if hit.didHit:
+                if closest_hit.dist > hit.dist:
+                    closest_hit = hit
+                    closest_obj = obj
     return closest_hit, closest_obj
 
 
-def Trace(ray, rngState, ray_colour, remaining_bounce):
+def Trace(ray, rngState, ray_colour, remaining_bounce, ray_origin_obj=None):
     incoming_light = np.array([0.0, 0.0, 0.0])
     # if remaining_bounce == -1:
     #     return incoming_light
-    hit, hit_obj = CalculateRyCollision(ray)
+    hit, hit_obj = CalculateRyCollision(ray, ray_origin_obj)
     if hit.didHit:
         if hit_obj.emission_strength != 0.0:
             emitted_light = hit_obj.emission_colour * hit_obj.emission_strength
@@ -90,7 +91,7 @@ def Trace(ray, rngState, ray_colour, remaining_bounce):
         ray.origin = hit.hitPoint
         for i in range(recursion_ray_per_pixel):
             ray.direction = normalize(hit.normal + randomDirection(rngState))
-            incoming_light += Trace(ray, rngState, ray_colour, remaining_bounce)
+            incoming_light += Trace(ray, rngState, ray_colour, remaining_bounce, hit_obj)
         return incoming_light/recursion_ray_per_pixel
     # incoming_light += GetEnvironmentLight(ray) * ray_colour
     return incoming_light

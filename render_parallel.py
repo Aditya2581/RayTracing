@@ -22,6 +22,9 @@ rank = comm.Get_rank()
 # untimeWarning)
 
 world_up = np.array([0.0, 1.0, 0.0])
+directional_light_dir = -normalize(np.array([-1.0, -1.0, 1.0]))
+directional_light_colour = np.array([1.0, 1.0, 1.0])
+directional_light_intensity = 1.0
 
 frame_averaging = False
 
@@ -58,7 +61,7 @@ s3.material(colour=np.array([119.0, 78.0, 169.0]))
 s4 = Sphere.Sphere(-500, 400, 1000, 1000)
 s4.material(colour=np.array([255.0, 255.0, 255.0]),
             emission_colour=np.array([255.0, 255.0, 255.0]),
-            emission_strength=1.0)
+            emission_strength=0.5)
 p0 = Plane.Plane(np.array([0.0, -20.0, 0.0]), np.array([0.0, 1.0, 0.0]))
 p0.material(colour=np.array([0.0, 0.0, 255.0]))
 p1 = Plane.Plane(np.array([1000.0, 1000.0, 1000.0]), np.array([1.0, 1.0, 1.0]))
@@ -74,18 +77,19 @@ image = np.zeros((rank_image_height, image_width, 3), dtype=np.float64)
 bounce_limit = 1
 recursion_ray_per_pixel = 20
 num_ray_per_pixels = recursion_ray_per_pixel**bounce_limit
-old_num_ray_per_pixels = 20
+old_num_ray_per_pixels = 10
 num_frames = 60
 
-def CalculateRyCollision(ray):
+def CalculateRyCollision(ray, origin_obj = None):
     closest_hit = hitInfo(dist=10 ** 6)
     closest_obj = Object()
     for obj in scene:
-        hit = obj.collision(ray)
-        if hit.didHit:
-            if closest_hit.dist > hit.dist:
-                closest_hit = hit
-                closest_obj = obj
+        if obj is not origin_obj:
+            hit = obj.collision(ray)
+            if hit.didHit:
+                if closest_hit.dist > hit.dist:
+                    closest_hit = hit
+                    closest_obj = obj
     return closest_hit, closest_obj
 
 
@@ -115,8 +119,9 @@ def Trace(ray, rngState, ray_colour, remaining_bounce):
 def oldTrace(ray, rngState):
     incoming_light = np.array([0.0, 0.0, 0.0])
     ray_colour = np.array([1.0, 1.0, 1.0])
+    hit_obj = None
     for _ in range(bounce_limit+1):
-        hit, hit_obj = CalculateRyCollision(ray)
+        hit, hit_obj = CalculateRyCollision(ray, hit_obj)
         if hit.didHit:
             ray.origin = hit.hitPoint
             ray.direction = normalize(hit.normal + randomDirection(rngState))
@@ -126,6 +131,7 @@ def oldTrace(ray, rngState):
             incoming_light += emitted_light * ray_colour
             ray_colour *= hit_obj.colour
         else:
+            # incoming_light += directional_light_intensity * directional_light_colour * ray_colour * np.dot(ray.direction, directional_light_dir)
             break
     return incoming_light
 
@@ -169,16 +175,15 @@ if not frame_averaging:
             tx = x / (image_width - 1)
             ty = y / (image_height - 1)
             point_local = bottom_left_local + np.array([plane_width * tx, plane_height * ty, 0.0])
-            point = camera_pos + camera_right * point_local[0] + camera_up * point_local[1] + camera_forward * point_local[
-                2]
+            point = camera_pos + camera_right * point_local[0] + camera_up * point_local[1] + camera_forward * point_local[2]
             ray = Ray(origin=camera_pos, direction=normalize(point - camera_pos))
 
             # Rasterization part for scene visualization
             # image[y_rank, x] = Raster(ray)
 
             # Parallel Ray Traced for final image
-            image[y_rank, x] = RT(ray, rngState)
-            # image[y_rank, x] = oldRT(ray, rngState)
+            # image[y_rank, x] = RT(ray, rngState)
+            image[y_rank, x] = oldRT(ray, rngState)
 else:
     # mutiple frames averaging
     av_image = image.copy()
@@ -190,9 +195,7 @@ else:
                 tx = x / (image_width - 1)
                 ty = y / (image_height - 1)
                 point_local = bottom_left_local + np.array([plane_width * tx, plane_height * ty, 0.0])
-                point = camera_pos + camera_right * point_local[0] + camera_up * point_local[1] + camera_forward * \
-                        point_local[
-                            2]
+                point = camera_pos + camera_right * point_local[0] + camera_up * point_local[1] + camera_forward * point_local[2]
                 ray = Ray(origin=camera_pos, direction=normalize(point - camera_pos))
 
                 # Rasterization part for scene visualization
@@ -220,7 +223,7 @@ print(f"rank: {rank}, time taken: {rank_time}")
 # image = np.ones(np.shape(image), dtype=float) * rank
 # image = np.random.random(np.shape(image))
 image = np.clip(image, 0.0, 1.0)*255
-image = image.astype(np.uint16)
+image = image.astype(np.uint8)
 # print(f"rank: {rank}, image data:\n{image}")
 # Image.fromarray(image).save(f"./outputs/{rank}prt-{rank_time}.png")
 
