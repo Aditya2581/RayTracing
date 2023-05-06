@@ -36,8 +36,8 @@ scene = Scenes.sphere_scene()
 # final array and RT properties
 image = np.zeros((rank_image_height, image_width, 3), dtype=np.float64)
 bounce_limit = 1
-num_ray_per_pixels = 50
-num_frames = 10
+num_ray_per_pixels = 10
+num_frames = 30
 
 
 def CalculateRyCollision(ray, origin_obj=None):
