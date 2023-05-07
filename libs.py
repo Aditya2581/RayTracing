@@ -28,6 +28,10 @@ def normalize(vect):
 def reflect_dir(ray_dir, normal):
     return normalize(-2 * np.dot(normal, ray_dir)*normal + ray_dir)
 
+def lerp(vec1, vec2, factor):
+    result = vec1 * (1-factor) + vec2 * factor
+    return result
+
 
 # def GetEnvironmentLight(EnvironmentEnabled, ray):
 #     if not EnvironmentEnabled:
@@ -89,3 +93,4 @@ class Object:
     def collision(self, ray):
         hit = hitInfo()
         return hit
+
