@@ -1,3 +1,5 @@
+import numpy as np
+
 from libs import *
 from PIL import Image
 from time import time
@@ -30,8 +32,8 @@ bottom_left_local = np.array([-plane_width / 2, -plane_height / 2, plane_dist])
 # final array and RT properties
 image = np.zeros((rank_image_height, image_width, 3), dtype=np.float64)
 bounce_limit = 2
-num_ray_per_pixels = 1
-num_frames = 4
+num_ray_per_bounce = 2
+num_frames = 1
 
 
 def CalculateRyCollision(ray, origin_obj=None):
@@ -59,35 +61,33 @@ def RC(ray):
     return closest_obj.colour
 
 
-def Trace(ray):
+def Trace(ray, ray_colour, remaining_bounce):
     incoming_light = np.array([0.0, 0.0, 0.0])
-    ray_colour = np.array([1.0, 1.0, 1.0])
     hit_obj = None
-    for _ in range(bounce_limit + 1):
-        hit, hit_obj = CalculateRyCollision(ray, hit_obj)
-        if hit.didHit:
-            ray.origin = hit.hitPoint
-            diffuse_dir = normalize(hit.normal + normalize(np.random.randn(3)))
+    hit, hit_obj = CalculateRyCollision(ray, hit_obj)
+    if hit.didHit:
+        if hit_obj.emission_strength > 0.001:
+            emitted_light = hit_obj.emission_colour * hit_obj.emission_strength
+            incoming_light += emitted_light * ray_colour
+            return incoming_light*remaining_bounce*num_ray_per_bounce
+        if remaining_bounce == 0:
+            return incoming_light
+        remaining_bounce -= 1
+        ray.origin = hit.hitPoint
+        ray_colour *= hit_obj.colour
+        for _ in range(num_ray_per_bounce):
+            diffuse_dir = normalize(hit.normal + np.random.randn(3))
             specular_dir = reflect_dir(ray_dir=ray.direction, normal=hit.normal)
             ray.direction = normalize(lerp(diffuse_dir, specular_dir, hit_obj.smoothness))
-            if hit_obj.emission_strength > 0.001:
-                emitted_light = hit_obj.emission_colour * hit_obj.emission_strength
-                incoming_light += emitted_light * ray_colour
-                break
-            ray_colour *= hit_obj.colour
-        else:
-            # incoming_light += directional_light_intensity * directional_light_colour * ray_colour * np.dot(
-            # ray.direction, directional_light_dir)
-            break
+            incoming_light += Trace(ray, ray_colour, remaining_bounce)
+        return incoming_light
     return incoming_light
 
 
 def RT(ray):
-    total_incoming_light = np.array([0.0, 0.0, 0.0])
-    for _ in range(num_ray_per_pixels):
-        total_incoming_light += Trace(ray)
-    total_incoming_light = total_incoming_light / num_ray_per_pixels
-    return total_incoming_light
+    ray_colour = np.array([1.0, 1.0, 1.0])
+    pixel_colour = Trace(ray, ray_colour, bounce_limit)/(bounce_limit*num_ray_per_bounce)
+    return pixel_colour
 
 
 total_main_function_time = 0.0
@@ -133,5 +133,5 @@ if rank == 0:
     for i in range(size):
         final_image[i * rank_image_height:(i + 1) * rank_image_height] = collected_image[i]
     print(f"\nmax rank time: {max_time}")
-    Image.fromarray(final_image).save(f"./outputs/oldprt-{max_time} {bounce_limit},{num_ray_per_pixels},{num_frames}.png")
+    Image.fromarray(final_image).save(f"./outputs/rc-{max_time} {bounce_limit},{num_frames}.png")
     playsound('note.mp3')

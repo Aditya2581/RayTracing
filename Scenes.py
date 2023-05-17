@@ -31,15 +31,15 @@ def scene1():
 
 
 def sphere_scene():
-    s0 = Sphere.Sphere(25, -11, 70, 10)
+    s0 = Sphere.Sphere(12.31, -6.76, 33.1, 5)
     s0.material(colour=np.array([255.0, 255.0, 255.0]))
-    s1 = Sphere.Sphere(10, -13.5, 60, 7)
+    s1 = Sphere.Sphere(5.64, -8.42, 31, 3.5)
     s1.material(colour=np.array([255.0, 0.0, 0.0]))
-    s2 = Sphere.Sphere(0, -16.5, 50, 3)
+    s2 = Sphere.Sphere(0.8, -9.51, 25.42, 1.5)
     s2.material(colour=np.array([0.0, 255.0, 0.0]))
-    s3 = Sphere.Sphere(0, -1018, 0, 1000)
-    s3.material(colour=np.array([0.0, 0.0, 255.0]))
-    s4 = Sphere.Sphere(-500, 400, 1000, 1000)
+    s3 = Sphere.Sphere(0, -510.4, -0.1, 500)
+    s3.material(colour=np.array([119.0, 77.0, 168.0]))
+    s4 = Sphere.Sphere(-210, 193.5, 559.4, 500)
     s4.material(colour=np.array([255.0, 255.0, 255.0]),
                 emission_colour=np.array([255.0, 255.0, 255.0]),
                 emission_strength=2.0)
@@ -81,11 +81,11 @@ def rgb_box():
     s2 = Sphere.Sphere(-2, 2, 2, 1)
     s3 = Sphere.Sphere(2, -2, -2, 1)
     s4 = Sphere.Sphere(-2, -2, -2, 1)
-    s0.material(colour=np.array([200.0, 200.0, 200.0]), smoothness=1.0)
-    s1.material(colour=np.array([200.0, 0.0, 0.0]), smoothness=0.4)
-    s2.material(colour=np.array([0.0, 200.0, 0.0]), smoothness=0.6)
-    s3.material(colour=np.array([0.0, 0.0, 200.0]), smoothness=0.8)
-    s4.material(colour=np.array([163.0, 7.0, 178.0]), smoothness=0.2)
+    s0.material(colour=np.array([200.0, 200.0, 200.0]), smoothness=0.0)
+    s1.material(colour=np.array([200.0, 0.0, 0.0]), smoothness=0.0)
+    s2.material(colour=np.array([0.0, 200.0, 0.0]), smoothness=0.0)
+    s3.material(colour=np.array([0.0, 0.0, 200.0]), smoothness=0.0)
+    s4.material(colour=np.array([163.0, 7.0, 178.0]), smoothness=0.0)
 
     scene = [p_bottom, p_left, p_top, p_back, p_right, s0, s1, s2, s3, s4]
     camera = Camera.Camera(pos=np.array([0.0, 0.0, -10.0]))
