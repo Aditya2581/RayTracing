@@ -1,5 +1,6 @@
 import numpy as np
 
+import copy
 from libs import *
 from PIL import Image
 from time import time
@@ -32,7 +33,9 @@ bottom_left_local = np.array([-plane_width / 2, -plane_height / 2, plane_dist])
 # final array and RT properties
 image = np.zeros((rank_image_height, image_width, 3), dtype=np.float64)
 bounce_limit = 2
-num_ray_per_bounce = 2
+num_ray_primary_obj_bounce = 10
+num_ray_secondary_obj_bounce = 10
+# num_ray_per_bounce = 2
 num_frames = 1
 
 
@@ -61,32 +64,40 @@ def RC(ray):
     return closest_obj.colour
 
 
-def Trace(ray, ray_colour, remaining_bounce):
+def Trace(ray, ray_colour, remaining_bounce, hit_obj, primary_obj_ray):
     incoming_light = np.array([0.0, 0.0, 0.0])
-    hit_obj = None
-    hit, hit_obj = CalculateRyCollision(ray, hit_obj)
+    hit, new_hit_obj = CalculateRyCollision(ray, hit_obj)
     if hit.didHit:
-        if hit_obj.emission_strength > 0.001:
-            emitted_light = hit_obj.emission_colour * hit_obj.emission_strength
-            incoming_light += emitted_light * ray_colour
-            return incoming_light*remaining_bounce*num_ray_per_bounce
+        new_ray_colour = copy.copy(ray_colour)
+        new_ray = Ray()
+        if new_hit_obj.emission_strength > 0.001:
+            emitted_light = new_hit_obj.emission_colour * new_hit_obj.emission_strength
+            incoming_light += emitted_light * new_ray_colour
+            return incoming_light  # * (num_ray_per_bounce**(remaining_bounce+1))
         if remaining_bounce == 0:
             return incoming_light
+
         remaining_bounce -= 1
-        ray.origin = hit.hitPoint
-        ray_colour *= hit_obj.colour
+        new_ray.origin = hit.hitPoint
+        new_ray_colour *= new_hit_obj.colour
+
+        if primary_obj_ray != 0:
+            num_ray_per_bounce = primary_obj_ray
+        else:
+            num_ray_per_bounce = num_ray_secondary_obj_bounce
+
         for _ in range(num_ray_per_bounce):
-            diffuse_dir = normalize(hit.normal + np.random.randn(3))
+            diffuse_dir = normalize(hit.normal + normalize(np.random.randn(3)))
             specular_dir = reflect_dir(ray_dir=ray.direction, normal=hit.normal)
-            ray.direction = normalize(lerp(diffuse_dir, specular_dir, hit_obj.smoothness))
-            incoming_light += Trace(ray, ray_colour, remaining_bounce)
-        return incoming_light
+            new_ray.direction = normalize(lerp(diffuse_dir, specular_dir, new_hit_obj.smoothness))
+            incoming_light += Trace(new_ray, new_ray_colour, remaining_bounce, new_hit_obj, 0)
+        return incoming_light / num_ray_per_bounce
     return incoming_light
 
 
 def RT(ray):
     ray_colour = np.array([1.0, 1.0, 1.0])
-    pixel_colour = Trace(ray, ray_colour, bounce_limit)/(bounce_limit*num_ray_per_bounce)
+    pixel_colour = Trace(ray, ray_colour, bounce_limit, None, num_ray_primary_obj_bounce)
     return pixel_colour
 
 
@@ -107,16 +118,30 @@ for frame in range(num_frames):
             ray = Ray(origin=camera.pos, direction=normalize(point - camera.pos))
 
             start_main_function_time = time()
+
             # Rasterization part for scene visualization
             # image[y_rank, x] = RC(ray)
 
             # Parallel Ray Traced for final image
             image[y_rank, x] = RT(ray)
+
             end_main_function_time = time()
             total_main_function_time += end_main_function_time - start_main_function_time
         end_row_time = time()
     averaged_frame_image += image
     end_frame_time = time()
+    pre_collection = 0
+    if pre_collection:
+        pre_average_frame = image
+        pre_average_frame = np.clip(pre_average_frame, 0.0, 1.0) * 255
+        pre_average_frame = pre_average_frame.astype(np.uint8)
+        pre_collected_image = comm.gather(pre_average_frame, root=0)
+        if rank == 0:
+            final_image = np.zeros((image_height, image_width, 3), dtype=np.uint8)
+            for i in range(size):
+                final_image[i * rank_image_height:(i + 1) * rank_image_height] = pre_collected_image[i]
+            Image.fromarray(final_image).save(f"./outputs/rpre_oldprt1_{frame}.png")
+            playsound('note.mp3')
 end_rank_time = time()
 averaged_frame_image = averaged_frame_image / num_frames
 averaged_frame_image = np.clip(averaged_frame_image, 0.0, 1.0) * 255

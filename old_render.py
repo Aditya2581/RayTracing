@@ -1,3 +1,6 @@
+# final renderer for a non-recursive type monte carlo summation
+
+import copy
 from libs import *
 from PIL import Image
 from time import time
@@ -30,8 +33,7 @@ bottom_left_local = np.array([-plane_width / 2, -plane_height / 2, plane_dist])
 # final array and RT properties
 image = np.zeros((rank_image_height, image_width, 3), dtype=np.float64)
 bounce_limit = 2
-num_ray_per_pixels = 1
-num_frames = 4
+num_ray_per_pixels = 100
 
 
 def CalculateRyCollision(ray, origin_obj=None):
@@ -85,53 +87,54 @@ def Trace(ray):
 def RT(ray):
     total_incoming_light = np.array([0.0, 0.0, 0.0])
     for _ in range(num_ray_per_pixels):
-        total_incoming_light += Trace(ray)
+        working_ray = copy.copy(ray)
+        current_pixel = Trace(working_ray)
+        total_incoming_light += current_pixel
+
     total_incoming_light = total_incoming_light / num_ray_per_pixels
     return total_incoming_light
 
 
 total_main_function_time = 0.0
 
-averaged_frame_image = image.copy()
 start_rank_time = time()
-for frame in range(num_frames):
-    start_frame_time = time()
-    for y_rank in range(rank_image_height):
-        y = y_rank + rank * rank_image_height
-        start_row_time = time()
-        for x in range(image_width):
-            tx = x / (image_width - 1)
-            ty = y / (image_height - 1)
-            point_local = bottom_left_local + np.array([plane_width * tx, plane_height * ty, 0.0])
-            point = camera.pos + camera.right * point_local[0] + camera.up * point_local[1] + camera.forward * point_local[2]
-            ray = Ray(origin=camera.pos, direction=normalize(point - camera.pos))
+for y_rank in range(rank_image_height):
+    y = y_rank + rank * rank_image_height
+    start_row_time = time()
+    for x in range(image_width):
+        tx = x / (image_width - 1)
+        ty = y / (image_height - 1)
+        point_local = bottom_left_local + np.array([plane_width * tx, plane_height * ty, 0.0])
+        point = camera.pos + camera.right * point_local[0] + camera.up * point_local[1] + camera.forward * point_local[
+            2]
+        ray = Ray(origin=camera.pos, direction=normalize(point - camera.pos))
 
-            start_main_function_time = time()
-            # Rasterization part for scene visualization
-            # image[y_rank, x] = RC(ray)
+        start_main_function_time = time()
 
-            # Parallel Ray Traced for final image
-            image[y_rank, x] = RT(ray)
-            end_main_function_time = time()
-            total_main_function_time += end_main_function_time - start_main_function_time
-        end_row_time = time()
-    averaged_frame_image += image
-    end_frame_time = time()
+        # Rasterization part for scene visualization
+        # image[y_rank, x] = RC(ray)
+
+        # Parallel Ray Traced for final image
+        image[y_rank, x] = RT(ray)
+
+        end_main_function_time = time()
+        total_main_function_time += end_main_function_time - start_main_function_time
+    end_row_time = time()
 end_rank_time = time()
-averaged_frame_image = averaged_frame_image / num_frames
-averaged_frame_image = np.clip(averaged_frame_image, 0.0, 1.0) * 255
-averaged_frame_image = averaged_frame_image.astype(np.uint8)
+
+image = np.clip(image, 0.0, 1.0) * 255
+image = image.astype(np.uint8)
 
 rank_time = end_rank_time - start_rank_time
 print(f"rank: {rank}, time taken: {rank_time}")
 print(f"rank: {rank}, time taken by the main function: {total_main_function_time}")
 
 max_time = comm.reduce(rank_time, MPI.MAX, root=0)
-collected_image = comm.gather(averaged_frame_image, root=0)
+collected_image = comm.gather(image, root=0)
 if rank == 0:
     final_image = np.zeros((image_height, image_width, 3), dtype=np.uint8)
     for i in range(size):
         final_image[i * rank_image_height:(i + 1) * rank_image_height] = collected_image[i]
     print(f"\nmax rank time: {max_time}")
-    Image.fromarray(final_image).save(f"./outputs/oldprt-{max_time} {bounce_limit},{num_ray_per_pixels},{num_frames}.png")
+    Image.fromarray(final_image).save(f"./outputs/oldprt-{max_time} {bounce_limit},{num_ray_per_pixels}.png")
     playsound('note.mp3')
