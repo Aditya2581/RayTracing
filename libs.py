@@ -1,23 +1,5 @@
-import random
-
 import numpy as np
 
-
-# def randomValue(state):
-#     state[0] = (state[0] + 195439) * (state[0] + 124395) * (state[0] + 845921)
-#     return abs(state[0] / 4294967295)
-
-def randomValue(state):
-    state[0] = state[0] * 747796405 + 2891336453
-    result = np.array([5], dtype=np.uint32)
-    result[0] = ((state[0] >> ((state[0] >> 28) + 4)) ^ state[0]) * 277803737
-    result[0] = (result[0] >> 22) ^ result[0]
-    return result[0]/4294967295.0
-
-def randomValueNormal(state):
-    theta = 2*np.pi*randomValue(state)
-    rho = np.sqrt(-2*np.log(randomValue(state)))
-    return rho*np.cos(theta)
 
 def normalize(vect):
     norm = np.linalg.norm(vect)
@@ -31,30 +13,6 @@ def reflect_dir(ray_dir, normal):
 def lerp(vec1, vec2, factor):
     result = vec1 * (1-factor) + vec2 * factor
     return result
-
-
-# def GetEnvironmentLight(EnvironmentEnabled, ray):
-#     if not EnvironmentEnabled:
-#         return 0
-#     skyGradientT = pow(smoothstep(0, 0.4, ray.dir.y), 0.35)
-#     groundToSkyT = smoothstep(-0.01, 0, ray.dir.y)
-#     skyGradient = lerp(SkyColourHorizon, SkyColourZenith, skyGradientT)
-#     sun = pow(max(0, dot(ray.dir, _WorldSpaceLightPos0.xyz)), SunFocus) * SunIntensity
-#     # Combine ground, sky, and sun
-#     return composite
-#     composite = lerp(GroundColour, skyGradient, groundToSkyT) + sun * (groundToSkyT >= 1)
-
-def randomDirection(state):
-    # x = random.normalvariate(0.5, 1.0)
-    # y = random.normalvariate(0.5, 1.0)
-    # z = random.normalvariate(0.5, 1.0)
-    # x = randomValue(state)
-    # y = randomValue(state)
-    # z = randomValue(state)
-    x = randomValueNormal(state)
-    y = randomValueNormal(state)
-    z = randomValueNormal(state)
-    return normalize(np.array([x, y, z]))
 
 
 class Ray:
@@ -93,4 +51,3 @@ class Object:
     def collision(self, ray):
         hit = hitInfo()
         return hit
-

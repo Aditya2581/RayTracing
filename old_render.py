@@ -1,5 +1,3 @@
-# final renderer for a non-recursive type monte carlo summation
-
 import copy
 from libs import *
 from PIL import Image
@@ -27,8 +25,6 @@ plane_height = plane_dist * np.tan(np.deg2rad(camera.fov * 0.5)) * 2
 plane_width = plane_height * (image_width / image_height)
 
 bottom_left_local = np.array([-plane_width / 2, -plane_height / 2, plane_dist])
-
-# scene
 
 # final array and RT properties
 image = np.zeros((rank_image_height, image_width, 3), dtype=np.float64)
