@@ -32,14 +32,9 @@ class hitInfo:
 class Object:
     def __init__(self):
         self.material()
-    # self.colour = np.array([1.0, 0.0, 0.0])
-    # self.emission_colour = np.array([1.0, 1.0, 1.0])
-    # self.emission_strength = 0.0
-    # self.smoothness = 0.0
 
     def material(self, colour=np.array([0.0, 0.0, 0.0]), emission_colour=np.array([0.0, 0.0, 0.0]),
                  emission_strength=0.0, smoothness=0.0):
-        # self.colour = colour/255.0  # object colour
         self.emission_colour = emission_colour/255.0  # emitting colour
         self.emission_strength = emission_strength  # emitting light strength
         if emission_strength > (10**(-3)):

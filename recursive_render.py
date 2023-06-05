@@ -6,35 +6,41 @@ import Scenes
 from mpi4py import MPI
 from playsound import playsound
 
+# Initialize MPI
 comm = MPI.COMM_WORLD
 size = comm.Get_size()
 rank = comm.Get_rank()
 
 world_up = np.array([0.0, 1.0, 0.0])
-# image properties
+
+# Image properties
 image_width = 480
 image_height = 360
 if (image_height % size) != 0:
     exit()
 rank_image_height = int(image_height / size)
 
+# Scene and camera setup
 scene, camera = Scenes.rgb_box()
 
+# Virtual image plane properties
 plane_dist = 0.1
 plane_height = plane_dist * np.tan(np.deg2rad(camera.fov * 0.5)) * 2
 plane_width = plane_height * (image_width / image_height)
 
 bottom_left_local = np.array([-plane_width / 2, -plane_height / 2, plane_dist])
 
-# final array and RT properties
+# Initialize the image array
 image = np.zeros((rank_image_height, image_width, 3), dtype=np.float64)
+
+# Ray tracing parameters
 bounce_limit = 2
-num_ray_primary_obj_bounce = 10
-num_ray_secondary_obj_bounce = 10
-# num_ray_per_bounce = 2
+num_ray_primary_obj_bounce = 2
+num_ray_secondary_obj_bounce = 2
 num_frames = 1
 
 
+# Function to calculate the closest collision with objects in the scene
 def CalculateRyCollision(ray, origin_obj=None):
     closest_hit = hitInfo(dist=10 ** 6)
     closest_obj = Object()
@@ -48,6 +54,7 @@ def CalculateRyCollision(ray, origin_obj=None):
     return closest_hit, closest_obj
 
 
+# Function for rasterization (not used in the final code)
 def RC(ray):
     closest_dist = 10 ** 6
     closest_obj = Object()
@@ -60,17 +67,25 @@ def RC(ray):
     return closest_obj.colour
 
 
+# Function for tracing rays and calculating incoming light recursively
 def Trace(ray, ray_colour, remaining_bounce, hit_obj, primary_obj_ray):
     incoming_light = np.array([0.0, 0.0, 0.0])
+
+    # Find the closest intersection point and object
     hit, new_hit_obj = CalculateRyCollision(ray, hit_obj)
+
     if hit.didHit:
         new_ray_colour = copy.copy(ray_colour)
         new_ray = Ray()
+
         if new_hit_obj.emission_strength > 0.001:
+            # Handle emission from the object
             emitted_light = new_hit_obj.emission_colour * new_hit_obj.emission_strength
             incoming_light += emitted_light * new_ray_colour
-            return incoming_light  # * (num_ray_per_bounce**(remaining_bounce+1))
+            return incoming_light
+
         if remaining_bounce == 0:
+            # Reached the maximum bounce limit, stop recursion
             return incoming_light
 
         remaining_bounce -= 1
@@ -83,29 +98,42 @@ def Trace(ray, ray_colour, remaining_bounce, hit_obj, primary_obj_ray):
             num_ray_per_bounce = num_ray_secondary_obj_bounce
 
         for _ in range(num_ray_per_bounce):
+            # Generate random diffuse and specular directions
             diffuse_dir = normalize(hit.normal + normalize(np.random.randn(3)))
             specular_dir = reflect_dir(ray_dir=ray.direction, normal=hit.normal)
             new_ray.direction = normalize(lerp(diffuse_dir, specular_dir, new_hit_obj.smoothness))
+
+            # Recursively trace the new ray and accumulate incoming light
             incoming_light += Trace(new_ray, new_ray_colour, remaining_bounce, new_hit_obj, 0)
+
         return incoming_light / num_ray_per_bounce
+
     return incoming_light
 
 
+# Function for performing ray tracing for a pixel
 def RT(ray):
     ray_colour = np.array([1.0, 1.0, 1.0])
     pixel_colour = Trace(ray, ray_colour, bounce_limit, None, num_ray_primary_obj_bounce)
     return pixel_colour
 
 
+# Variables to track time
 total_main_function_time = 0.0
-
-averaged_frame_image = image.copy()
 start_rank_time = time()
+
+frame_image = image.copy()
+
+# Loop through each frame
 for frame in range(num_frames):
     start_frame_time = time()
+
+    # Loop through each row assigned to the rank
     for y_rank in range(rank_image_height):
         y = y_rank + rank * rank_image_height
         start_row_time = time()
+
+        # Loop through each pixel in the row
         for x in range(image_width):
             tx = x / (image_width - 1)
             ty = y / (image_height - 1)
@@ -115,44 +143,47 @@ for frame in range(num_frames):
 
             start_main_function_time = time()
 
-            # Rasterization part for scene visualization
-            # image[y_rank, x] = RC(ray)
+            # Rasterization part for scene visualization (not used in the final code)
+            # frame_image[y_rank, x] = RC(ray)
 
-            # Parallel Ray Traced for final image
-            image[y_rank, x] = RT(ray)
+            # Parallel Ray Tracing for final image
+            frame_image[y_rank, x] = RT(ray)
 
             end_main_function_time = time()
             total_main_function_time += end_main_function_time - start_main_function_time
-        end_row_time = time()
-    averaged_frame_image += image
-    end_frame_time = time()
-    pre_collection = 0
-    if pre_collection:
-        pre_average_frame = image
-        pre_average_frame = np.clip(pre_average_frame, 0.0, 1.0) * 255
-        pre_average_frame = pre_average_frame.astype(np.uint8)
-        pre_collected_image = comm.gather(pre_average_frame, root=0)
-        if rank == 0:
-            final_image = np.zeros((image_height, image_width, 3), dtype=np.uint8)
-            for i in range(size):
-                final_image[i * rank_image_height:(i + 1) * rank_image_height] = pre_collected_image[i]
-            Image.fromarray(final_image).save(f"./outputs/rpre_oldprt1_{frame}.png")
-            playsound('note.mp3')
-end_rank_time = time()
-averaged_frame_image = averaged_frame_image / num_frames
-averaged_frame_image = np.clip(averaged_frame_image, 0.0, 1.0) * 255
-averaged_frame_image = averaged_frame_image.astype(np.uint8)
 
+        end_row_time = time()
+    # accumulation data of all the frames into one buffer
+    image += frame_image
+    # storing time data
+    end_frame_time = time()
+end_rank_time = time()
+# averaging data from all the frames
+image = image / num_frames
+
+# Clip and convert the image to the appropriate data type
+image = np.clip(image, 0.0, 1.0) * 255
+image = image.astype(np.uint8)
+
+# Calculate the maximum rank time across all processes
 rank_time = end_rank_time - start_rank_time
+max_time = comm.reduce(rank_time, MPI.MAX, root=0)
+
+# Print timing information
 print(f"rank: {rank}, time taken: {rank_time}")
 print(f"rank: {rank}, time taken by the main function: {total_main_function_time}")
 
-max_time = comm.reduce(rank_time, MPI.MAX, root=0)
-collected_image = comm.gather(averaged_frame_image, root=0)
+# Gather the image data from all processes to process 0
+collected_image = comm.gather(image, root=0)
+
 if rank == 0:
+    # Combine the collected images from each rank
     final_image = np.zeros((image_height, image_width, 3), dtype=np.uint8)
     for i in range(size):
         final_image[i * rank_image_height:(i + 1) * rank_image_height] = collected_image[i]
-    print(f"\nmax rank time: {max_time}")
+
+    # Save the final image
     Image.fromarray(final_image).save(f"./outputs/rc-{max_time} {bounce_limit},{num_frames}.png")
+    # Play a sound to indicate completion
     playsound('note.mp3')
+    print(f"\nmax rank time: {max_time}")
