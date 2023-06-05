@@ -37,7 +37,6 @@ image = np.zeros((rank_image_height, image_width, 3), dtype=np.float64)
 bounce_limit = 2
 num_ray_primary_obj_bounce = 2
 num_ray_secondary_obj_bounce = 2
-num_frames = 1
 
 
 # Function to calculate the closest collision with objects in the scene
@@ -122,44 +121,33 @@ def RT(ray):
 total_main_function_time = 0.0
 start_rank_time = time()
 
-frame_image = image.copy()
+# Loop through each row assigned to the rank
+for y_rank in range(rank_image_height):
+    y = y_rank + rank * rank_image_height
+    start_row_time = time()
+    # Loop through each pixel in the row
+    for x in range(image_width):
+        tx = x / (image_width - 1)
+        ty = y / (image_height - 1)
+        # Calculate the position of the pixel on the virtual image plane
+        point_local = bottom_left_local + np.array([plane_width * tx, plane_height * ty, 0.0])
+        # Calculate the position of the pixel in the world space
+        point = camera.pos + camera.right * point_local[0] + camera.up * point_local[1] + camera.forward * point_local[2]
+        # Create a ray from the camera position to the pixel position
+        ray = Ray(origin=camera.pos, direction=normalize(point - camera.pos))
 
-# Loop through each frame
-for frame in range(num_frames):
-    start_frame_time = time()
+        start_main_function_time = time()
 
-    # Loop through each row assigned to the rank
-    for y_rank in range(rank_image_height):
-        y = y_rank + rank * rank_image_height
-        start_row_time = time()
+        # Rasterization part for scene visualization (not used in the final code)
+        # image[y_rank, x] = RC(ray)
 
-        # Loop through each pixel in the row
-        for x in range(image_width):
-            tx = x / (image_width - 1)
-            ty = y / (image_height - 1)
-            point_local = bottom_left_local + np.array([plane_width * tx, plane_height * ty, 0.0])
-            point = camera.pos + camera.right * point_local[0] + camera.up * point_local[1] + camera.forward * point_local[2]
-            ray = Ray(origin=camera.pos, direction=normalize(point - camera.pos))
+        # Parallel Ray Tracing for final image
+        image[y_rank, x] = RT(ray)
 
-            start_main_function_time = time()
-
-            # Rasterization part for scene visualization (not used in the final code)
-            # frame_image[y_rank, x] = RC(ray)
-
-            # Parallel Ray Tracing for final image
-            frame_image[y_rank, x] = RT(ray)
-
-            end_main_function_time = time()
-            total_main_function_time += end_main_function_time - start_main_function_time
-
-        end_row_time = time()
-    # accumulation data of all the frames into one buffer
-    image += frame_image
-    # storing time data
-    end_frame_time = time()
+        end_main_function_time = time()
+        total_main_function_time += end_main_function_time - start_main_function_time
+    end_row_time = time()
 end_rank_time = time()
-# averaging data from all the frames
-image = image / num_frames
 
 # Clip and convert the image to the appropriate data type
 image = np.clip(image, 0.0, 1.0) * 255
@@ -183,7 +171,7 @@ if rank == 0:
         final_image[i * rank_image_height:(i + 1) * rank_image_height] = collected_image[i]
 
     # Save the final image
-    Image.fromarray(final_image).save(f"./outputs/rc-{max_time} {bounce_limit},{num_frames}.png")
+    Image.fromarray(final_image).save(f"./outputs/rc-{max_time} {bounce_limit}.png")
     # Play a sound to indicate completion
     playsound('note.mp3')
     print(f"\nmax rank time: {max_time}")
