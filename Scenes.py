@@ -1,6 +1,8 @@
+# To get a glimpse of how any scene looks inside main for loop, change the renderer to RC
 from libs import *
 
 
+# Places sphere to test the coordinate system (there is no light source in this scene so ray traced results will be black)
 def coordinate_test():
     s0 = Sphere(0, 0, 100, 5)
     s0.material(colour=np.array([255.0, 255.0, 255.0]))
@@ -17,6 +19,7 @@ def coordinate_test():
     return scene, camera
 
 
+# a scene in which few spheres are sitting on top of a big sphere
 def sphere_scene():
     s0 = Sphere(12.31, -6.76, 33.1, 5)
     s0.material(colour=np.array([255.0, 255.0, 255.0]))
@@ -35,6 +38,7 @@ def sphere_scene():
     return scene, camera
 
 
+# a RBG enclosed box which contains spheres of different properties to test
 def rgb_box():
     p_bottom = Plane(np.array([0.0, -4.0, 0.0]), np.array([0.0, 1.0, 0.0]))
     p_left = Plane(np.array([-4.0, 0.0, 0.0]), np.array([-1.0, 0.0, 0.0]))

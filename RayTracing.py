@@ -18,6 +18,8 @@ world_up = np.array([0.0, 1.0, 0.0])
 image_width = 480
 image_height = 360
 if (image_height % size) != 0:
+    if rank == 0:
+        print("image height should be divisible by the number of processors used")
     exit()
 rank_image_height = int(image_height / size)
 
@@ -39,8 +41,8 @@ bounce_limit = 2
 # for simple render
 num_ray_per_pixels = 2
 # for recursive render
-num_ray_primary_obj_bounce = 2
-num_ray_secondary_obj_bounce = 2
+num_ray_primary_obj_bounce = 2      # number of rays that start from primary ray after first bounce
+num_ray_secondary_obj_bounce = 2    # number of rays that start from secondary rays after bounce
 
 
 # Function to calculate the closest collision with objects in the scene
@@ -57,7 +59,8 @@ def CalculateRyCollision(ray, origin_obj=None):
     return closest_hit, closest_obj
 
 
-# Function to calculate the colour of the ray after collision
+# Renderer for scene Visualisation
+# shoots one ray per pixel and returns base colour of the first object it collides
 def RC(ray):
     closest_dist = 10 ** 6
     closest_obj = Object()
@@ -70,7 +73,8 @@ def RC(ray):
     return closest_obj.colour
 
 
-# Function to trace the ray and calculate the incoming light
+# Function to trace the ray and calculate the incoming light for the simple renderer
+# This function is called by 'RT_simple' function
 def Trace_simple(ray):
     incoming_light = np.array([0.0, 0.0, 0.0])
     ray_colour = np.array([1.0, 1.0, 1.0])
@@ -81,6 +85,7 @@ def Trace_simple(ray):
         if hit.didHit:
             ray.origin = hit.hitPoint
             # Calculate the diffuse and specular directions for the next ray
+            # normal random numbers are used since the normal direction of any surface will receive maximum light which illuminated it
             diffuse_dir = normalize(hit.normal + normalize(np.random.randn(3)))
             specular_dir = reflect_dir(ray_dir=ray.direction, normal=hit.normal)
             # Interpolate between the diffuse and specular directions based on the object's smoothness
@@ -98,6 +103,7 @@ def Trace_simple(ray):
 
 
 # Function to perform ray tracing for a given ray
+# This function calls 'Trace_simple' function
 def RT_simple(ray):
     total_incoming_light = np.array([0.0, 0.0, 0.0])
     for _ in range(num_ray_per_pixels):
@@ -108,7 +114,8 @@ def RT_simple(ray):
     return total_incoming_light
 
 
-# Function for tracing rays and calculating incoming light recursively
+# Function for tracing rays and calculate incoming light recursively
+# This function is called by 'RT_recursive' function
 def Trace_recursive(ray, ray_colour, remaining_bounce, hit_obj, primary_obj_ray):
     incoming_light = np.array([0.0, 0.0, 0.0])
 
@@ -139,18 +146,19 @@ def Trace_recursive(ray, ray_colour, remaining_bounce, hit_obj, primary_obj_ray)
             num_ray_per_bounce = num_ray_secondary_obj_bounce
 
         for _ in range(num_ray_per_bounce):
-            # Generate random diffuse and specular directions
+            # Generate diffuse and specular directions based on the incident ray
             diffuse_dir = normalize(hit.normal + normalize(np.random.randn(3)))
             specular_dir = reflect_dir(ray_dir=ray.direction, normal=hit.normal)
             new_ray.direction = normalize(lerp(diffuse_dir, specular_dir, new_hit_obj.smoothness))
 
             # Recursively trace the new ray and accumulate incoming light
             incoming_light += Trace_recursive(new_ray, new_ray_colour, remaining_bounce, new_hit_obj, 0)
-        return incoming_light / num_ray_per_bounce
+        return incoming_light / num_ray_per_bounce      # normalising to keep the intensity in check
     return incoming_light
 
 
 # Function for performing ray tracing for a pixel
+# This function calls 'Trace_recursive' function
 def RT_recursive(ray):
     ray_colour = np.array([1.0, 1.0, 1.0])
     pixel_colour = Trace_recursive(ray, ray_colour, bounce_limit, None, num_ray_primary_obj_bounce)
@@ -177,11 +185,13 @@ for y_rank in range(rank_image_height):
 
         start_main_function_time = time()
 
-        # Rasterization part for scene visualization
+        # Renderer for scene visualization
         # image[y_rank, x] = RC(ray)
 
-        # Perform ray tracing for the pixel and calculate the pixel's color
+        # Renderer using simple ray tracing algorithm (form of monte carlo)
         # image[y_rank, x] = RT_simple(ray)
+
+        # Renderer using recursive ray tracing algorithm (form of monte carlo)
         image[y_rank, x] = RT_recursive(ray)
 
         end_main_function_time = time()
@@ -211,7 +221,7 @@ if rank == 0:
         final_image[i * rank_image_height:(i + 1) * rank_image_height] = collected_image[i]
 
     # Save the final image and play a sound notification
-    Image.fromarray(final_image).save(f"./outputs/oldprt-{max_time} {bounce_limit},{num_ray_per_pixels}.png")
+    Image.fromarray(final_image).save(f"./outputs/rt-{int(max_time)}s,{bounce_limit},{num_ray_per_pixels}.png")
     # Play a sound to indicate completion
     playsound('note.mp3')
     print(f"\nmax rank time: {max_time}")
